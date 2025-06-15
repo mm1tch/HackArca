@@ -1,3 +1,5 @@
+// app/reportes.tsx
+
 import React, { useState } from "react";
 import {
   View,
@@ -5,33 +7,32 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator, // Importamos el indicador de carga
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { RecommendationCard } from "../components/RecommendationCard"; //llamamos al componente de tarjeta de recomendación
-import { SentimentStatCard } from "../components/SentimentCard"; // Importamos el componente sentiment analisis
+import { RecommendationCard } from "../components/RecommendationCard";
+import { SentimentStatCard } from "../components/SentimentCard"; // Asegúrate que el nombre del archivo es correcto
 import { FeedbackStatCard } from "../components/FeedbackStatCard";
+import { analyzeReports } from "../api/gemini"; // Importamos la función de la API
 
-// Datos de ejemplo para las recomendaciones
+// --- DATOS DE EJEMPLO (Se mantienen para fallback y desarrollo) ---
 const recommendationsData = [
   {
     title: "Capacitación en Atención:",
-    description:
-      "23 sucursales requieren entrenamiento inmediato en servicio al cliente (impacto potencial: +0.8 puntos)",
+    description: "23 sucursales requieren entrenamiento inmediato...",
     color: "#34D399",
   },
   {
     title: "Optimización de Inventario:",
-    description:
-      "Implementar sistema de reposición automática en 15 ubicaciones críticas",
+    description: "Implementar sistema de reposición automática...",
     color: "#FBBF24",
   },
   {
     title: "Programa de Incentivos:",
-    description: "Reconocer 8 sucursales top performers como casos de éxito",
+    description: "Reconocer 8 sucursales top performers...",
     color: "#60A5FA",
   },
 ];
-
 const sentimentData = [
   {
     emoji: "😊",
@@ -52,7 +53,6 @@ const sentimentData = [
     color: "rgba(239, 68, 68, 0.2)",
   },
 ];
-
 const feedbackStatsData = [
   { value: "4.2", label: "SATISFACCIÓN" },
   { value: "78%", label: "COMENTARIOS POSITIVOS" },
@@ -60,33 +60,64 @@ const feedbackStatsData = [
 ];
 
 export default function ReportesScreen() {
+  // --- ESTADOS ---
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-
-  // Estado para controlar la visibilidad de los selectores de fecha
   const [isStartDatePickerVisible, setStartDatePickerVisibility] =
     useState(false);
   const [isEndDatePickerVisible, setEndDatePickerVisibility] = useState(false);
 
-  // Funciones para manejar la selección de fechas
+  // ✅ Estados para la API
+  const [isLoading, setIsLoading] = useState(false);
+  const [reportData, setReportData] = useState<any>(null); // Empezamos sin datos de la API
+
+  // --- FUNCIONES ---
   const handleConfirmStartDate = (date: Date) => {
     setStartDate(date);
     setStartDatePickerVisibility(false);
   };
-
   const handleConfirmEndDate = (date: Date) => {
     setEndDate(date);
     setEndDatePickerVisibility(false);
   };
 
+  // ✅ Función para llamar a Gemini
+  const handleGenerateReport = async () => {
+    setIsLoading(true);
+    setReportData(null); // Limpiamos datos anteriores
+    try {
+      const analysisResult = await analyzeReports(startDate, endDate);
+      setReportData(analysisResult);
+    } catch (error) {
+      console.error(error);
+      alert("Error al generar el reporte. Inténtalo de nuevo.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Variables para mostrar datos (de la API si existen, si no, los de ejemplo)
+  const currentRecommendations =
+    reportData?.recommendations ?? recommendationsData;
+  const currentSentiment =
+    reportData?.sentimentAnalysis?.stats ?? sentimentData;
+  const currentFeedbackStats =
+    reportData?.feedbackAnalysis?.stats ?? feedbackStatsData;
+  const currentFeedbackIntro =
+    reportData?.feedbackAnalysis?.intro ??
+    "El análisis de sentimiento de 847 comentarios...";
+  const currentFeedbackInsight =
+    reportData?.feedbackAnalysis?.insight ??
+    "🎯 Insight Clave: Las sucursales con comentarios...";
+
   return (
     <View style={styles.container}>
-      {/* 1. Barra de Título (Roja) */}
+      {/* Barra de Título */}
       <View style={styles.titleBar}>
         <Text style={styles.titleText}>Visualización de Reportes</Text>
       </View>
 
-      {/* 2. Barra de Filtros (Gris Claro) */}
+      {/* Barra de Filtros */}
       <View style={styles.filterBar}>
         <TouchableOpacity
           style={styles.datePickerButton}
@@ -96,7 +127,6 @@ export default function ReportesScreen() {
             {startDate.toLocaleDateString()}
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity
           style={styles.datePickerButton}
           onPress={() => setEndDatePickerVisibility(true)}
@@ -105,13 +135,21 @@ export default function ReportesScreen() {
             {endDate.toLocaleDateString()}
           </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.generateButton}>
-          <Text style={styles.generateButtonText}>Generar Reportes</Text>
+        <TouchableOpacity
+          style={styles.generateButton}
+          onPress={handleGenerateReport}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.generateButtonText}>Generar Reportes</Text>
+          )}
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.mainContent}>
+        {/* Tarjeta 1: Recomendaciones */}
         <View style={styles.cardContainer}>
           <View style={styles.header}>
             <Text style={styles.title}>Recomendaciones IA</Text>
@@ -120,95 +158,64 @@ export default function ReportesScreen() {
             </View>
           </View>
           <Text style={styles.introText}>
-            Basado en el análisis de 142 sucursales y patrones de satisfacción,
-            la IA ha identificado oportunidades de mejora prioritarias:
+            Basado en el análisis de datos, la IA ha identificado oportunidades
+            de mejora prioritarias:
           </Text>
           <View style={styles.recommendationsList}>
-            {recommendationsData.map((rec, index) => (
-              <RecommendationCard
-                key={index}
-                title={rec.title}
-                description={rec.description}
-                color={rec.color}
-              />
+            {currentRecommendations.map((rec: any, index: number) => (
+              <RecommendationCard key={index} {...rec} />
             ))}
           </View>
         </View>
 
-        {/* SEGUNDA TARJETA: Análisis de Sentimiento */}
+        {/* Tarjeta 2: Análisis de Sentimiento */}
         <View style={styles.cardContainer}>
           <View style={styles.header}>
-            <Text style={styles.title}>Análisis - Sentimiento</Text>
+            <Text style={styles.title}>Análisis de Sentimiento</Text>
             <View style={styles.iaStatusBadge}>
               <Text style={styles.iaStatusText}>IA GENERADO</Text>
             </View>
           </View>
           <Text style={styles.introText}>
-            Evaluación automática del tono y sentimiento en comentarios de
-            colaboradores y feedback de clientes:
+            Evaluación automática del tono en comentarios de colaboradores y
+            clientes:
           </Text>
           <View style={styles.statsRow}>
-            {sentimentData.map((stat, index) => (
-              <SentimentStatCard
-                key={index}
-                emoji={stat.emoji}
-                percentage={stat.percentage}
-                label={stat.label}
-                color={stat.color}
-              />
+            {currentSentiment.map((stat: any, index: number) => (
+              <SentimentStatCard key={index} {...stat} />
             ))}
           </View>
           <View style={styles.insightBox}>
             <Text style={styles.insightText}>
               💡 La IA detectó que sucursales con sentimiento negativo superior
-              al 20% requieren intervención inmediata. Se identificaron 8 casos
-              críticos.
+              al 20% requieren intervención.
             </Text>
           </View>
         </View>
 
+        {/* Tarjeta 3: Análisis de Feedback */}
         <View style={styles.cardContainer}>
-          {/* Encabezado */}
           <View style={styles.header}>
             <Text style={styles.title}>Análisis de Feedback</Text>
             <View style={styles.iaStatusBadge}>
               <Text style={styles.iaStatusText}>IA GENERADO</Text>
             </View>
           </View>
-
-          {/* Párrafo de introducción */}
-          <Text style={styles.introText}>
-            El análisis de sentimiento de 847 comentarios de colaboradores y
-            1,234 respuestas de clientes revela una correlación del 89% entre
-            observaciones internas y satisfacción del cliente.
-          </Text>
-
-          {/* Caja de insight clave */}
+          <Text style={styles.introText}>{currentFeedbackIntro}</Text>
           <View style={styles.insightBox}>
-            <Text style={styles.insightText}>
-              🎯 Insight Clave: Las sucursales con comentarios positivos de
-              colaboradores sobre "organización del inventario" muestran 23%
-              mayor satisfacción del cliente.
-            </Text>
+            <Text style={styles.insightText}>{currentFeedbackInsight}</Text>
           </View>
-
-          {/* Fila de tarjetas de estadísticas */}
           <View style={styles.feedbackStatsRow}>
-            {feedbackStatsData.map((stat, index) => (
-              <FeedbackStatCard
-                key={index}
-                value={stat.value}
-                label={stat.label}
-              />
+            {currentFeedbackStats.map((stat: any, index: number) => (
+              <FeedbackStatCard key={index} {...stat} />
             ))}
           </View>
         </View>
       </ScrollView>
 
-      {/* Selectores de Fecha (Modales) */}
+      {/* Selectores de Fecha */}
       <DateTimePickerModal
         isVisible={isStartDatePickerVisible}
-        mode="date"
         onConfirm={handleConfirmStartDate}
         onCancel={() => setStartDatePickerVisibility(false)}
         date={startDate}
@@ -217,7 +224,6 @@ export default function ReportesScreen() {
       />
       <DateTimePickerModal
         isVisible={isEndDatePickerVisible}
-        mode="date"
         onConfirm={handleConfirmEndDate}
         onCancel={() => setEndDatePickerVisibility(false)}
         date={endDate}
@@ -228,30 +234,19 @@ export default function ReportesScreen() {
   );
 }
 
-const BRAND_RED = "#C31F39";
-const BRAND_GREEN = "#4CAF50";
-
+// ✅ ESTILOS COMPLETOS Y CORRECTOS
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff", // Fondo blanco para el contenido
-  },
-  // Estilos para la barra de título
+  container: { flex: 1, backgroundColor: "#F2F2F2" },
   titleBar: {
-    backgroundColor: BRAND_RED,
+    backgroundColor: "#C31F39",
     paddingVertical: 20,
     paddingHorizontal: 20,
     justifyContent: "center",
     alignItems: "center",
   },
-  titleText: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  // Estilos para la nueva barra de filtros
+  titleText: { color: "#fff", fontSize: 24, fontWeight: "bold" },
   filterBar: {
-    backgroundColor: "#F2F2F2", // Un gris claro
+    backgroundColor: "#F2F2F2",
     padding: 15,
     flexDirection: "row",
     alignItems: "center",
@@ -270,30 +265,16 @@ const styles = StyleSheet.create({
     marginRight: 10,
     paddingVertical: 10,
   },
-  datePickerText: {
-    color: "#333",
-    marginRight: 4,
-    fontSize: 16,
-  },
+  datePickerText: { color: "#333", marginRight: 4, fontSize: 16 },
   generateButton: {
-    backgroundColor: BRAND_GREEN,
+    backgroundColor: "#4CAF50",
     borderRadius: 8,
     paddingHorizontal: 18,
     paddingVertical: 12,
-
     justifyContent: "center",
   },
-  generateButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  // Contenido principal de la página
-  mainContent: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
+  generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  mainContent: { padding: 20, paddingBottom: 40 },
   cardContainer: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -303,7 +284,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 5,
-    marginBottom: 20, // Espacio entre las tarjetas grandes
+    marginBottom: 20,
   },
   header: {
     flexDirection: "row",
@@ -311,51 +292,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#111827",
-  },
+  title: { fontSize: 22, fontWeight: "bold", color: "#111827" },
   iaStatusBadge: {
     backgroundColor: "#8B5CF6",
     borderRadius: 20,
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
-  iaStatusText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
+  iaStatusText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
   introText: {
     fontSize: 16,
     color: "#4B5563",
     lineHeight: 24,
     marginBottom: 20,
   },
-  // Nuevos estilos para esta sección
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
+  recommendationsList: {},
+  statsRow: { flexDirection: "row", justifyContent: "space-between" },
   insightBox: {
-    backgroundColor: "rgba(139, 92, 246, 0.1)", // Fondo morado muy claro
+    backgroundColor: "rgba(139, 92, 246, 0.1)",
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: "#8B5CF6", // Borde morado
+    borderLeftColor: "#8B5CF6",
+    marginBottom: 20,
   },
-  insightText: {
-    fontSize: 15,
-    color: "#4C1D95", // Texto morado oscuro
-    lineHeight: 22,
-  },
-  recommendationsList: {},
+  insightText: { fontSize: 15, color: "#4C1D95", lineHeight: 22 },
   feedbackStatsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginHorizontal: -6,
+    justifyContent: "center",
+    marginHorizontal: -4,
+  },
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    marginTop: 50,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 24,
   },
 });
