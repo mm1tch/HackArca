@@ -1,6 +1,4 @@
-// app/agenda.tsx
-
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,6 +13,9 @@ import { CalendarPlusIcon } from "../components/icons/MiscIcons";
 import { NewAppointmentModal } from "../components/NewAppointmentModal";
 
 type FilterType = "Todas" | AppointmentStatus;
+
+const capitalize = (s: string) =>
+  s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
 const StatCard: React.FC<{ count: number; label: string; color: string }> = ({
   count,
@@ -36,7 +37,47 @@ export default function AgendaScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("Todas");
   const [isModalVisible, setModalVisible] = useState(false);
 
-  // Funciones de la página
+    useEffect(() => {
+      fetch("http://10.22.204.147:5050/api/visitas")
+        .then(res => res.json())
+        .then(data => {
+          // Mezcla aleatoria y toma 50
+          const sample = data
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 50);
+
+          const referenceDateStr = "2025-06-15";
+
+          const parsedAppointments: Appointment[] = sample.map((v: any) => {
+            const fechaStr = v.fecha;
+            let status: AppointmentStatus;
+
+            if (!fechaStr || isNaN(Date.parse(fechaStr))) {
+              status = AppointmentStatus.Cancelled;
+            } else if (fechaStr > referenceDateStr) {
+              status = AppointmentStatus.Future;
+            } else {
+              status = AppointmentStatus.Past;
+            }
+
+            return {
+              id: v.id,
+              title: v.sucursal,
+              date: new Date(fechaStr || referenceDateStr),
+              status,
+              description: "", // Ya no se muestra
+              location: v.ubicacion,
+            };
+          });
+
+          setAppointments(parsedAppointments);
+        })
+        .catch(err => console.error("❌ Error cargando visitas:", err));
+    }, []);
+
+
+
+
   const handlePrevMonth = useCallback(() => {
     setCurrentDate(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
@@ -72,6 +113,9 @@ export default function AgendaScreen() {
   );
 
   const { counts, filteredAppointments } = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Normalizar la fecha actual para comparación
+
     const calculatedCounts: { [key in AppointmentStatus]: number } & {
       Todas: number;
     } = {
@@ -81,18 +125,38 @@ export default function AgendaScreen() {
       Todas: 0,
     };
 
-    let filteredList = appointments;
+    // Clasificar las citas correctamente
+    const classifiedAppointments = appointments.map(app => {
+      const appDate = new Date(app.date);
+      appDate.setHours(0, 0, 0, 0); // Normalizar fecha de la cita
 
-    appointments.forEach((app) => {
+      if (app.status === AppointmentStatus.Cancelled) {
+        return app; // Mantener las canceladas como están
+      }
+
+      // Reclasificar solo si no está cancelada
+      const newStatus = appDate < now
+        ? AppointmentStatus.Past
+        : (appDate > now ? AppointmentStatus.Future : AppointmentStatus.Future); // Puedes cambiar esto si quieres un estado "Presente"
+
+      return {
+        ...app,
+        status: newStatus
+      };
+    });
+
+    // Actualizar los contadores
+    classifiedAppointments.forEach((app) => {
       if (app.status in calculatedCounts) {
         calculatedCounts[app.status]++;
       }
     });
-    calculatedCounts.Todas =
-      appointments.length - calculatedCounts[AppointmentStatus.Cancelled];
+    calculatedCounts.Todas = classifiedAppointments.length;
 
-    if (selectedDay) {
-      filteredList = appointments.filter((app) => {
+    let filteredList = classifiedAppointments;
+
+    if (selectedDay !== null) {
+      filteredList = classifiedAppointments.filter((app) => {
         const appDate = new Date(app.date);
         return (
           appDate.getDate() === selectedDay &&
@@ -101,10 +165,14 @@ export default function AgendaScreen() {
         );
       });
     } else if (activeFilter !== "Todas") {
-      filteredList = appointments.filter((app) => app.status === activeFilter);
+      filteredList = classifiedAppointments.filter((app) => app.status === activeFilter);
     }
 
-    return { counts: calculatedCounts, filteredAppointments: filteredList };
+    return {
+      counts: calculatedCounts,
+      filteredAppointments: filteredList,
+      classifiedAppointments // Opcional: si necesitas acceder a las citas clasificadas
+    };
   }, [appointments, currentDate, selectedDay, activeFilter]);
 
   const filterButtons: { label: string; type: FilterType }[] = [
@@ -174,11 +242,9 @@ export default function AgendaScreen() {
 
         <View style={styles.appointmentsList}>
           {filteredAppointments.length > 0 ? (
-            <>
-              {filteredAppointments.map((app: Appointment) => (
-                <AppointmentCard key={app.id} appointment={app} />
-              ))}
-            </>
+            filteredAppointments.map((app: Appointment) => (
+              <AppointmentCard key={app.id} appointment={app} />
+            ))
           ) : (
             <View style={styles.noAppointmentsContainer}>
               <Text style={styles.noAppointmentsText}>
@@ -281,3 +347,4 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
+
