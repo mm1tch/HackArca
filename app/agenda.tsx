@@ -71,10 +71,7 @@ export default function AgendaScreen() {
     []
   );
 
-  // ✅ SOLUCIÓN 2 APLICADA AQUÍ
   const { counts, filteredAppointments } = useMemo(() => {
-    // 1. Tipamos el objeto `calculatedCounts`.
-    //    Sus claves DEBEN ser los valores del enum `AppointmentStatus`.
     const calculatedCounts: { [key in AppointmentStatus]: number } & {
       Todas: number;
     } = {
@@ -86,7 +83,6 @@ export default function AgendaScreen() {
 
     let filteredList = appointments;
 
-    // 2. Este bucle ahora funciona perfectamente porque TypeScript entiende la relación.
     appointments.forEach((app) => {
       if (app.status in calculatedCounts) {
         calculatedCounts[app.status]++;
@@ -95,7 +91,6 @@ export default function AgendaScreen() {
     calculatedCounts.Todas =
       appointments.length - calculatedCounts[AppointmentStatus.Cancelled];
 
-    // Lógica de filtrado (sin cambios)
     if (selectedDay) {
       filteredList = appointments.filter((app) => {
         const appDate = new Date(app.date);
@@ -235,7 +230,7 @@ const styles = StyleSheet.create({
   statCount: { fontSize: 24, fontWeight: "bold" },
   statLabel: { fontSize: 12, color: "#64748B", marginTop: 4 },
   filterTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: "#334155",
     marginBottom: 8,

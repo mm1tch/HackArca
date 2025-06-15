@@ -1,31 +1,24 @@
+// app/_layout.tsx
+
 import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, Pressable } from "react-native";
-import { Slot } from "expo-router"; // ¡Importante para que se vea el contenido!
+import { View, StyleSheet, SafeAreaView } from "react-native";
+import { Slot } from "expo-router";
 import { BottomNavigationBar } from "../components/BottomNavigationBar";
-import { SettingsIcon } from "../components/icons/MiscIcons";
+import { Header } from "../components/Header";
 
 export default function AppLayout() {
   return (
-    // SafeAreaView para evitar el notch y la barra de estado
     <SafeAreaView style={styles.safeArea}>
-      {/* View principal que se comporta como el <body> */}
       <View style={styles.appContainer}>
-        {/* Encabezado */}
-        <View style={styles.header}>
-          <View style={styles.headerSpacer} />
-          <Text style={styles.headerTitle}>Ver como cambiar por pag</Text>
-          <Pressable
-            style={styles.settingsButton}
-            onPress={() => alert("Configuración presionado!")}
-          >
-            <SettingsIcon width={24} height={24} fill="#4A5568" />
-          </Pressable>
+        {/* 2. USAMOS EL NUEVO COMPONENTE HEADER */}
+        <Header />
+
+        {/* El contenido de la página actual se renderizará aquí */}
+        <View style={styles.content}>
+          <Slot />
         </View>
 
-        {/* El contenido de la página actual (index.tsx) se renderizará aquí */}
-        <Slot />
-
-        {}
+        {/* La barra de navegación se queda igual */}
         <BottomNavigationBar />
       </View>
     </SafeAreaView>
@@ -41,24 +34,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F2F2F2",
   },
-  header: {
-    backgroundColor: "#fff",
-    padding: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1E293B",
-  },
-  settingsButton: {
-    padding: 4,
-  },
-  headerSpacer: {
-    width: 28,
+  content: {
+    flex: 1,
   },
 });
