@@ -6,8 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "arcaapp",
-    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
