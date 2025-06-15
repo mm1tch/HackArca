@@ -2,7 +2,6 @@
 import React from "react";
 import Svg, { Path } from "react-native-svg";
 
-// 1. UNA SOLA INTERFAZ para todas las props que necesitamos
 interface IconProps {
   width?: number;
   height?: number;
@@ -10,8 +9,6 @@ interface IconProps {
   fill?: string;
   stroke?: string;
 }
-
-// 2. TRADUCIMOS CADA ICONO
 
 export const ChevronLeftIcon: React.FC<IconProps> = ({
   width = 24,
@@ -83,6 +80,20 @@ export const CalendarPlusIcon: React.FC<IconProps> = ({
       strokeWidth="2"
       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm7-7v4m0 0H8m4 0h4m-4-8v4"
       stroke={stroke}
+    />
+  </Svg>
+);
+
+// Icono de reporte para el botón
+export const ReportGenIcon: React.FC<IconProps> = ({
+  width = 24,
+  height = 24,
+  fill = "#fff",
+}) => (
+  <Svg width={width} height={height} viewBox="0 0 24 24">
+    <Path
+      fill={fill}
+      d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13.5,16V19H10.5V16H13.5M13.5,10V14H10.5V10H13.5M18,17H15V19H18V17M18,13H15V16H18V13M18,9H15V12H18V9Z"
     />
   </Svg>
 );

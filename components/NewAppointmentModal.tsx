@@ -234,6 +234,7 @@ const styles = StyleSheet.create({
   popupDivider: { height: 1, backgroundColor: "#eee", marginVertical: 12 },
   popupLabel: {
     fontWeight: "600",
+    fontSize: 16,
     marginTop: 8,
     marginBottom: 4,
     color: "#222",
