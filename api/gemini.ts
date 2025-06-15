@@ -1,3 +1,5 @@
+// api/gemini.ts
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Constants from "expo-constants";
 
@@ -9,50 +11,78 @@ if (!API_KEY || typeof API_KEY !== "string") {
 
 const genAI = new GoogleGenerativeAI(API_KEY as string);
 
-// ✅ NUEVA FUNCIÓN PARA LOS REPORTES
-export async function analyzeReports(startDate: Date, endDate: Date) {
+/**
+ * Analiza datos de encuestas y comentarios para generar un reporte de inteligencia de negocio.
+ * @param startDate - La fecha de inicio del periodo a analizar.
+ * @param endDate - La fecha de fin del periodo a analizar.
+ * @param dataToAnalyze - Un objeto con los datos de encuestas y comentarios.
+ * @returns Un objeto JSON con el reporte analizado.
+ */
+export async function analyzeReports(
+  startDate: Date,
+  endDate: Date,
+  dataToAnalyze: any
+) {
   try {
     console.log("Generando reporte con Gemini...");
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash-latest",
     });
 
-    // Este es el "prompt" o la instrucción para la IA. Es la parte más importante.
-    // Lo hacemos muy específico para que nos devuelva un JSON con la estructura exacta que queremos.
-    const prompt = `
-      Eres un analista de datos experto para una empresa.
-      Analiza los datos de feedback de clientes y colaboradores entre las fechas ${startDate.toLocaleDateString()} y ${endDate.toLocaleDateString()}.
+    const dataString = JSON.stringify(dataToAnalyze, null, 2);
 
-      Genera un reporte conciso y devuelve la respuesta ÚNICAMENTE como un objeto JSON válido con la siguiente estructura:
+    const prompt = `
+      Eres un analista de datos experto para una empresa de retail y distribución.
+      Tu tarea es analizar un conjunto de datos que contiene resultados de encuestas de satisfacción y comentarios de evaluaciones internas para diferentes sucursales.
+
+      El periodo de análisis es del ${startDate.toLocaleDateString()} al ${endDate.toLocaleDateString()}.
+
+      A continuación, te proporciono los datos en formato JSON. La clave "survey" contiene datos de encuestas de clientes y "comentarios" contiene evaluaciones internas de la empresa sobre la sucursal.
+
+      DATOS A ANALIZAR:
+      \`\`\`json
+      ${dataString}
+      \`\`\`
+
+      Basado en los datos proporcionados, genera un reporte conciso. Tu respuesta DEBE SER ÚNICAMENTE un objeto JSON válido con la siguiente estructura, sin texto adicional, explicaciones, ni la palabra "json":
       {
         "recommendations": [
           {
-            "title": "Capacitación en Atención:",
-            "description": "23 sucursales requieren entrenamiento inmediato en servicio al cliente (impacto potencial: +0.8 puntos)",
-            "color": "#34D399"
-          },
-          {
-            "title": "Optimización de Inventario:",
-            "description": "Implementar sistema de reposición automática en 15 ubicaciones críticas",
-            "color": "#FBBF24"
+            "title": "string",
+            "description": "string",
+            "color": "#XXXXXX"
           }
         ],
-        "sentimentAnalysis": [
-          { "emoji": "😊", "percentage": 67, "label": "POSITIVO", "color": "rgba(52, 211, 153, 0.2)" },
-          { "emoji": "😐", "percentage": 21, "label": "NEUTRAL", "color": "rgba(251, 191, 36, 0.2)" },
-          { "emoji": "😞", "percentage": 12, "label": "NEGATIVO", "color": "rgba(239, 68, 68, 0.2)" }
-        ],
-        "feedbackAnalysis": {
-          "intro": "El análisis de sentimiento de 847 comentarios de colaboradores y 1,234 respuestas de clientes revela una correlación del 89% entre observaciones internas y satisfacción del cliente.",
-          "insight": "🎯 Insight Clave: Las sucursales con comentarios positivos de colaboradores sobre \\"organización del inventario\\" muestran 23% mayor satisfacción del cliente.",
+        "sentimentAnalysis": {
           "stats": [
-            { "value": "4.2", "label": "SATISFACCIÓN PROMEDIO" },
-            { "value": "78%", "label": "COMENTARIOS POSITIVOS" },
-            { "value": "2.1k", "label": "COMENTARIOS ANALIZADOS" }
+            { "emoji": "😊", "percentage": 0, "label": "POSITIVO", "color": "rgba(52, 211, 153, 0.2)" },
+            { "emoji": "😐", "percentage": 0, "label": "NEUTRAL", "color": "rgba(251, 191, 36, 0.2)" },
+            { "emoji": "😞", "percentage": 0, "label": "NEGATIVO", "color": "rgba(239, 68, 68, 0.2)" }
+          ]
+        },
+        "feedbackAnalysis": {
+          "intro": "string",
+          "insight": "string",
+          "stats": [
+            { "value": "string", "label": "SATISFACCIÓN PROMEDIO" },
+            { "value": "string", "label": "COMENTARIOS POSITIVOS" },
+            { "value": "string", "label": "COMENTARIOS ANALIZADOS" }
           ]
         }
       }
-      Por favor, asegúrate de que los datos sean realistas pero inventados para esta demostración.
+
+      INSTRUCCIONES DETALLADAS PARA EL ANÁLISIS:
+      1.  **Recommendations**: Identifica los 2 o 3 problemas más críticos o las oportunidades de mejora más significativas. Basa tus recomendaciones en las calificaciones más bajas de las encuestas (valores de 1 o 2 en 'entrega', 'disponibilidad', 'atencion', 'respuesta') y en los temas negativos recurrentes en los comentarios. Cuantifica el problema (ej: "X sucursales", "Y% de los comentarios"). Asigna un color hexadecimal relevante.
+      2.  **Sentiment Analysis**: Analiza TODOS los textos en los campos 'comentarios' (tanto de las encuestas como de los comentarios internos). Clasifícalos como POSITIVO, NEUTRAL o NEGATIVO y calcula el porcentaje de cada uno sobre el total de comentarios. La suma de los porcentajes debe ser 100.
+      3.  **Feedback Analysis**:
+          - **intro**: Resume la cantidad de datos analizados (total de encuestas y total de comentarios internos).
+          - **insight**: Busca una correlación interesante. Por ejemplo, relaciona las 'Estrellas' de los comentarios internos con los promedios de las encuestas de clientes para las mismas sucursales.
+          - **stats**:
+            - 'SATISFACCIÓN PROMEDIO': Calcula el promedio general considerando las calificaciones de las encuestas (1-5) y las 'Estrellas' (1-5) de los comentarios internos. Formatea el resultado a un decimal.
+            - 'COMENTARIOS POSITIVOS': Usa el porcentaje que calculaste para el análisis de sentimiento.
+            - 'COMENTARIOS ANALIZADOS': Suma el total de comentarios de las encuestas y el total de comentarios internos. Formatea como un número con 'k' si es mayor a 1000.
+
+      Genera el objeto JSON directamente.
     `;
 
     const result = await model.generateContent(prompt);
@@ -65,17 +95,17 @@ export async function analyzeReports(startDate: Date, endDate: Date) {
     const endIndex = text.lastIndexOf("}");
 
     if (startIndex !== -1 && endIndex !== -1) {
-      // Extraemos solo la cadena que parece ser el JSON
       const jsonString = text.substring(startIndex, endIndex + 1);
-      console.log("JSON extraído y limpio:", jsonString); // ✅ AÑADE ESTO
+      console.log("JSON extraído y limpio:", jsonString);
       return JSON.parse(jsonString);
     } else {
-      // Si no encontramos un JSON, lanzamos un error claro
       throw new Error(
         "La respuesta de la IA no contenía un objeto JSON válido."
       );
     }
   } catch (error) {
-    // ...
+    console.error("Error al analizar los reportes con Gemini:", error);
+    return null;
   }
 }
+
