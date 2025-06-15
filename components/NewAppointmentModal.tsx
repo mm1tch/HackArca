@@ -1,4 +1,3 @@
-// components/NewAppointmentModal.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -8,47 +7,78 @@ import {
   TextInput,
   TouchableOpacity,
   Pressable,
+  Platform,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
+// 1. IMPORTAMOS LA NUEVA LIBRERÍA
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { Appointment, AppointmentStatus } from "../types";
+
 interface NewAppointmentModalProps {
   visible: boolean;
   onClose: () => void;
   onSave: (newAppointment: Omit<Appointment, "id">) => void;
 }
 
-const services = ["Consulta", "Revisión", "Tratamiento", "Limpieza Dental"];
+const services = [
+  "Mantenimiento",
+  "Revisión",
+  "Desempeño",
+  "Oportunidades de mejora",
+  "Otros",
+];
 
 export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   visible,
   onClose,
   onSave,
 }) => {
-  // 1. TODA LA LÓGICA DEL FORMULARIO VIVE AQUÍ
   const [clientName, setClientName] = useState("");
   const [date, setDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [time, setTime] = useState("");
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [service, setService] = useState("");
+  const [time, setTime] = useState(new Date());
+  const [motive, setMotive] = useState("");
+
+  // 2. SIMPLIFICAMOS EL ESTADO. Solo necesitamos saber si el picker está visible.
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [isTimePickerVisible, setTimePickerVisibility] = useState(false);
+
+  // 3. LAS FUNCIONES HANDLER AHORA SON MÁS SIMPLES
+  const handleConfirmDate = (selectedDate: Date) => {
+    setDate(selectedDate);
+    setDatePickerVisibility(false);
+  };
+
+  const handleConfirmTime = (selectedTime: Date) => {
+    setTime(selectedTime);
+    setTimePickerVisibility(false);
+  };
 
   const handleSave = () => {
-    if (!clientName || !service) {
-      alert("Por favor, completa todos los campos.");
+    if (!clientName || !motive) {
+      // <-- CAMBIO 1
+      alert("Por favor, completa el nombre y el motivo.");
       return;
     }
-    // Creamos el objeto con los datos del formulario
+
+    // Combinamos la fecha y la hora en un solo objeto Date
+    const finalDateTime = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      time.getHours(),
+      time.getMinutes()
+    );
+
     const newAppointmentData: Omit<Appointment, "id"> = {
       title: `Cita de ${clientName}`,
-      description: service,
-      date: date, // Aquí deberías combinar la fecha y la hora seleccionada
-      status: AppointmentStatus.Future, // Las nuevas citas son siempre futuras
+      description: motive,
+      date: finalDateTime,
+      status: AppointmentStatus.Future,
     };
-    onSave(newAppointmentData); // Enviamos los datos al padre (agenda.tsx)
+    onSave(newAppointmentData);
     resetForm();
     onClose();
   };
-
   const handleCancel = () => {
     resetForm();
     onClose();
@@ -56,9 +86,9 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
   const resetForm = () => {
     setClientName("");
-    setService("");
+    setMotive("");
     setDate(new Date());
-    setTime("");
+    setTime(new Date());
   };
 
   return (
@@ -93,40 +123,44 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             onChangeText={setClientName}
           />
 
-          {/* Fecha y Hora (simplificado por ahora) */}
+          {/* Fecha de la Cita */}
           <Text style={styles.popupLabel}>Fecha</Text>
           <TouchableOpacity
             style={styles.popupInput}
-            onPress={() => setShowDatePicker(true)}
+            onPress={() => setDatePickerVisibility(true)}
           >
-            <Text>{date.toLocaleDateString()}</Text>
+            <Text>
+              {date.toLocaleDateString("es-ES", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              })}
+            </Text>
           </TouchableOpacity>
+
           <Text style={styles.popupLabel}>Hora</Text>
           <TouchableOpacity
             style={styles.popupInput}
-            onPress={() => setShowTimePicker(true)}
+            onPress={() => setTimePickerVisibility(true)}
           >
-            <Text>{time || "--:-- --"}</Text>
+            <Text>
+              {time.toLocaleTimeString("es-ES", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })}
+            </Text>
           </TouchableOpacity>
 
-          {/* Servicio */}
-          <Text style={styles.popupLabel}>Servicio</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={service}
-              onValueChange={(itemValue) => setService(itemValue)}
-              style={styles.picker}
-            >
-              <Picker.Item
-                label="Selecciona un servicio"
-                value=""
-                enabled={false}
-              />
-              {services.map((srv) => (
-                <Picker.Item key={srv} label={srv} value={srv} />
-              ))}
-            </Picker>
-          </View>
+          {/* Motivo de la visita */}
+          <Text style={styles.popupLabel}>Motivo de la visita</Text>
+          <TextInput
+            style={styles.popupInput}
+            placeholder="Ingrese motivo u objetivo principal de la visita"
+            placeholderTextColor="#9CA3AF"
+            value={motive}
+            onChangeText={setMotive}
+          />
 
           {/* Botones */}
           <View style={styles.popupButtonRow}>
@@ -149,11 +183,37 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           </View>
         </View>
       </View>
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleConfirmDate}
+        onCancel={() => setDatePickerVisibility(false)}
+        date={date}
+        display="spinner"
+        textColor="black"
+        modalStyleIOS={styles.pickerModal}
+        // Textos de botones en español
+        confirmTextIOS="Confirmar"
+        cancelTextIOS="Cancelar"
+      />
+
+      <DateTimePickerModal
+        isVisible={isTimePickerVisible}
+        mode="time"
+        onConfirm={handleConfirmTime}
+        onCancel={() => setTimePickerVisibility(false)}
+        date={time}
+        display="spinner"
+        textColor="black"
+        modalStyleIOS={styles.pickerModal}
+        // Textos de botones en español
+        confirmTextIOS="Confirmar"
+        cancelTextIOS="Cancelar"
+      />
     </Modal>
   );
 };
 
-// 2. USA LOS ESTILOS QUE CREASTE
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
@@ -166,6 +226,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 24,
     width: "90%",
+    maxHeight: "85%",
     alignItems: "stretch",
     elevation: 5,
   },
@@ -185,15 +246,6 @@ const styles = StyleSheet.create({
     height: 50,
     justifyContent: "center",
     paddingHorizontal: 10,
-    marginBottom: 8,
-  },
-  pickerContainer: {
-    backgroundColor: "#fafafa",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    height: 50,
-    justifyContent: "center",
     marginBottom: 8,
   },
   picker: { height: 50, width: "100%" },
@@ -218,6 +270,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     flex: 1,
     marginLeft: 8,
+    alignItems: "center",
+  },
+  pickerModal: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // Estilo para hacer el picker más alto y visible
+  pickerContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    minHeight: 150,
+    width: "90%",
+    justifyContent: "center",
     alignItems: "center",
   },
 });
