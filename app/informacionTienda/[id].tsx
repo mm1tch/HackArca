@@ -332,7 +332,12 @@ export default function InformacionTienda() {
       </View>
 
       <View style={styles.imageBox}>
-        {/* Puedes poner una imagen dinámica aquí */}
+        {/* Aquí va la imagen, con la ruta correcta a la carpeta 'images' */}
+        <Image
+          source={require("../../assets/images/imgInfoTiendas.jpg")}
+          style={styles.imageBoxImage}
+          resizeMode="cover"
+        />
       </View>
 
       {/* <<< PASO 4: Conecta el onPress del botón */}
@@ -530,6 +535,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5EFEC",
     flex: 1,
     padding: 20,
+  },
+  imageBoxImage: {
+    width: "100%",
+    height: "100%",
   },
   loading: {
     flex: 1,
