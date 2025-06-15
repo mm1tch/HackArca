@@ -7,117 +7,124 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator, // Importamos el indicador de carga
+  ActivityIndicator,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { RecommendationCard } from "../components/RecommendationCard";
-import { SentimentStatCard } from "../components/SentimentCard"; // Asegúrate que el nombre del archivo es correcto
+import { SentimentStatCard } from "../components/SentimentCard";
 import { FeedbackStatCard } from "../components/FeedbackStatCard";
-import { analyzeReports } from "../api/gemini"; // Importamos la función de la API
-
-// --- DATOS DE EJEMPLO (Se mantienen para fallback y desarrollo) ---
-const recommendationsData = [
-  {
-    title: "Capacitación en Atención:",
-    description: "23 sucursales requieren entrenamiento inmediato...",
-    color: "#34D399",
-  },
-  {
-    title: "Optimización de Inventario:",
-    description: "Implementar sistema de reposición automática...",
-    color: "#FBBF24",
-  },
-  {
-    title: "Programa de Incentivos:",
-    description: "Reconocer 8 sucursales top performers...",
-    color: "#60A5FA",
-  },
-];
-const sentimentData = [
-  {
-    emoji: "😊",
-    percentage: 67,
-    label: "POSITIVO",
-    color: "rgba(52, 211, 153, 0.2)",
-  },
-  {
-    emoji: "😐",
-    percentage: 21,
-    label: "NEUTRAL",
-    color: "rgba(251, 191, 36, 0.2)",
-  },
-  {
-    emoji: "😞",
-    percentage: 12,
-    label: "NEGATIVO",
-    color: "rgba(239, 68, 68, 0.2)",
-  },
-];
-const feedbackStatsData = [
-  { value: "4.2", label: "SATISFACCIÓN" },
-  { value: "78%", label: "COMENTARIOS POSITIVOS" },
-  { value: "2.1k", label: "COMENTARIOS ANALIZADOS" },
-];
+import { analyzeReports } from "../api/gemini";
 
 export default function ReportesScreen() {
-  // --- ESTADOS ---
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [isStartDatePickerVisible, setStartDatePickerVisibility] =
     useState(false);
-  const [isEndDatePickerVisible, setEndDatePickerVisibility] = useState(false);
-
-  // ✅ Estados para la API
+  const [isEndDatePickerVisible, setEndDatePickerVisibility] =
+    useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [reportData, setReportData] = useState<any>(null); // Empezamos sin datos de la API
+  const [reportData, setReportData] = useState<any>(null);
 
-  // --- FUNCIONES ---
   const handleConfirmStartDate = (date: Date) => {
     setStartDate(date);
     setStartDatePickerVisibility(false);
   };
+
   const handleConfirmEndDate = (date: Date) => {
     setEndDate(date);
     setEndDatePickerVisibility(false);
   };
 
-  // ✅ Función para llamar a Gemini
   const handleGenerateReport = async () => {
     setIsLoading(true);
-    setReportData(null); // Limpiamos datos anteriores
+    setReportData(null);
+
+    // Aseguramos que la hora de endDate sea el final del día
+    endDate.setHours(23, 59, 59, 999);
+
     try {
-      const analysisResult = await analyzeReports(startDate, endDate);
-      setReportData(analysisResult);
+      // 1. Obtener todas las encuestas
+      const surveysResponse = await fetch("http://10.22.204.147:5050/api/surveys");
+      const allSurveysData = await surveysResponse.json();
+
+      // 2. Filtrar encuestas por el rango de fechas seleccionado
+      const filteredSurveys = allSurveysData.filter((s: any) => {
+        const surveyDate = new Date(s.fecha);
+        return surveyDate >= startDate && surveyDate <= endDate;
+      });
+
+      if (filteredSurveys.length === 0) {
+        alert("No se encontraron datos en el rango de fechas seleccionado.");
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log(`Se encontraron ${filteredSurveys.length} encuestas en el rango.`);
+
+      // 3. Para cada encuesta filtrada, obtener los comentarios internos correspondientes
+      const dataToAnalyze = await Promise.all(
+        filteredSurveys.map(async (survey: any) => {
+          try {
+            const commentsResponse = await fetch(
+              `http://10.22.204.147:5050/api/comentarios?nombreSucursal=${encodeURIComponent(
+                survey.sucursal
+              )}`
+            );
+            const commentsData = await commentsResponse.json().catch(() => []); // Si hay error en el JSON, devolver array vacío
+            return {
+              survey: {
+                id: survey.id,
+                sucursal: survey.sucursal,
+                fecha: survey.fecha,
+                scores: {
+                    entrega: survey.survey.entrega,
+                    disponibilidad: survey.survey.disponibilidad,
+                    promocional: survey.survey.promocional,
+                    atencion: survey.survey.atencion,
+                    respuesta: survey.survey.respuesta,
+                },
+                comentarios: survey.survey.comentarios,
+              },
+              comentarios_internos: commentsData || [],
+            };
+          } catch (e) {
+            console.error(`Error al obtener comentarios para ${survey.sucursal}:`, e);
+            // Devolver solo la encuesta si los comentarios fallan
+            return { survey, comentarios_internos: [] };
+          }
+        })
+      );
+      
+      // 4. Enviar los datos combinados y filtrados a Gemini para análisis
+      const geminiResponse = await analyzeReports(startDate, endDate, dataToAnalyze);
+
+      if (!geminiResponse) {
+          throw new Error("La respuesta de Gemini fue nula o inválida.");
+      }
+
+      setReportData(geminiResponse);
     } catch (error) {
-      console.error(error);
-      alert("Error al generar el reporte. Inténtalo de nuevo.");
+      console.error("Error detallado al generar el reporte:", error);
+      alert("Error al generar el reporte. Revisa la consola para más detalles.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ✅ Variables para mostrar datos (de la API si existen, si no, los de ejemplo)
-  const currentRecommendations =
-    reportData?.recommendations ?? recommendationsData;
-  const currentSentiment =
-    reportData?.sentimentAnalysis?.stats ?? sentimentData;
-  const currentFeedbackStats =
-    reportData?.feedbackAnalysis?.stats ?? feedbackStatsData;
+  const currentRecommendations = reportData?.recommendations ?? [];
+  const currentSentiment = reportData?.sentimentAnalysis?.stats ?? [];
+  const currentFeedbackStats = reportData?.feedbackAnalysis?.stats ?? [];
   const currentFeedbackIntro =
-    reportData?.feedbackAnalysis?.intro ??
-    "El análisis de sentimiento de 847 comentarios...";
+    reportData?.feedbackAnalysis?.intro ?? "Selecciona un rango de fechas y genera un reporte para ver el análisis.";
   const currentFeedbackInsight =
-    reportData?.feedbackAnalysis?.insight ??
-    "🎯 Insight Clave: Las sucursales con comentarios...";
+    reportData?.feedbackAnalysis?.insight ?? "No hay insights disponibles hasta que se genere un reporte.";
 
   return (
     <View style={styles.container}>
-      {/* Barra de Título */}
       <View style={styles.titleBar}>
         <Text style={styles.titleText}>Visualización de Reportes</Text>
       </View>
 
-      {/* Barra de Filtros */}
       <View style={styles.filterBar}>
         <TouchableOpacity
           style={styles.datePickerButton}
@@ -149,71 +156,84 @@ export default function ReportesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.mainContent}>
-        {/* Tarjeta 1: Recomendaciones */}
-        <View style={styles.cardContainer}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Recomendaciones IA</Text>
-            <View style={styles.iaStatusBadge}>
-              <Text style={styles.iaStatusText}>IA GENERADO</Text>
+        {isLoading && (
+            <View style={styles.placeholderContainer}>
+                <ActivityIndicator size="large" color="#C31F39" />
+                <Text style={styles.placeholderText}>Generando análisis con IA... Esto puede tardar un momento.</Text>
             </View>
-          </View>
-          <Text style={styles.introText}>
-            Basado en el análisis de datos, la IA ha identificado oportunidades
-            de mejora prioritarias:
-          </Text>
-          <View style={styles.recommendationsList}>
-            {currentRecommendations.map((rec: any, index: number) => (
-              <RecommendationCard key={index} {...rec} />
-            ))}
-          </View>
-        </View>
+        )}
+        {!isLoading && !reportData && (
+             <View style={styles.placeholderContainer}>
+                <Text style={styles.placeholderText}>
+                    Selecciona un rango de fechas y presiona "Generar Reportes" para que la IA analice los datos.
+                </Text>
+            </View>
+        )}
+        {reportData && (
+          <>
+            <View style={styles.cardContainer}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Recomendaciones IA</Text>
+                <View style={styles.iaStatusBadge}>
+                  <Text style={styles.iaStatusText}>IA GENERADO</Text>
+                </View>
+              </View>
+              <Text style={styles.introText}>
+                Basado en el análisis de datos, la IA ha identificado oportunidades
+                de mejora prioritarias:
+              </Text>
+              <View style={styles.recommendationsList}>
+                {currentRecommendations.length > 0 ? (
+                  currentRecommendations.map((rec: any, index: number) => (
+                    <RecommendationCard key={index} {...rec} />
+                  ))
+                ) : <Text>No se generaron recomendaciones.</Text>}
+              </View>
+            </View>
 
-        {/* Tarjeta 2: Análisis de Sentimiento */}
-        <View style={styles.cardContainer}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Análisis de Sentimiento</Text>
-            <View style={styles.iaStatusBadge}>
-              <Text style={styles.iaStatusText}>IA GENERADO</Text>
+            <View style={styles.cardContainer}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Análisis de Sentimiento</Text>
+                <View style={styles.iaStatusBadge}>
+                  <Text style={styles.iaStatusText}>IA GENERADO</Text>
+                </View>
+              </View>
+              <Text style={styles.introText}>
+                Evaluación automática del tono en comentarios de colaboradores y
+                clientes:
+              </Text>
+              <View style={styles.statsRow}>
+                {currentSentiment.length > 0 ? (
+                  currentSentiment.map((stat: any, index: number) => (
+                    <SentimentStatCard key={index} {...stat} />
+                  ))
+                ) : <Text>No se pudo analizar el sentimiento.</Text>}
+              </View>
             </View>
-          </View>
-          <Text style={styles.introText}>
-            Evaluación automática del tono en comentarios de colaboradores y
-            clientes:
-          </Text>
-          <View style={styles.statsRow}>
-            {currentSentiment.map((stat: any, index: number) => (
-              <SentimentStatCard key={index} {...stat} />
-            ))}
-          </View>
-          <View style={styles.insightBox}>
-            <Text style={styles.insightText}>
-              💡 La IA detectó que sucursales con sentimiento negativo superior
-              al 20% requieren intervención.
-            </Text>
-          </View>
-        </View>
 
-        {/* Tarjeta 3: Análisis de Feedback */}
-        <View style={styles.cardContainer}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Análisis de Feedback</Text>
-            <View style={styles.iaStatusBadge}>
-              <Text style={styles.iaStatusText}>IA GENERADO</Text>
+            <View style={styles.cardContainer}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Análisis de Feedback</Text>
+                <View style={styles.iaStatusBadge}>
+                  <Text style={styles.iaStatusText}>IA GENERADO</Text>
+                </View>
+              </View>
+              <Text style={styles.introText}>{currentFeedbackIntro}</Text>
+              <View style={styles.insightBox}>
+                <Text style={styles.insightText}>{currentFeedbackInsight}</Text>
+              </View>
+              <View style={styles.feedbackStatsRow}>
+                {currentFeedbackStats.length > 0 ? (
+                  currentFeedbackStats.map((stat: any, index: number) => (
+                    <FeedbackStatCard key={index} {...stat} />
+                  ))
+                ) : <Text>No hay estadísticas disponibles.</Text>}
+              </View>
             </View>
-          </View>
-          <Text style={styles.introText}>{currentFeedbackIntro}</Text>
-          <View style={styles.insightBox}>
-            <Text style={styles.insightText}>{currentFeedbackInsight}</Text>
-          </View>
-          <View style={styles.feedbackStatsRow}>
-            {currentFeedbackStats.map((stat: any, index: number) => (
-              <FeedbackStatCard key={index} {...stat} />
-            ))}
-          </View>
-        </View>
+          </>
+        )}
       </ScrollView>
 
-      {/* Selectores de Fecha */}
       <DateTimePickerModal
         isVisible={isStartDatePickerVisible}
         onConfirm={handleConfirmStartDate}
@@ -234,9 +254,9 @@ export default function ReportesScreen() {
   );
 }
 
-// ✅ ESTILOS COMPLETOS Y CORRECTOS
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F2F2F2" },
+
   titleBar: {
     backgroundColor: "#C31F39",
     paddingVertical: 20,
@@ -245,6 +265,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   titleText: { color: "#fff", fontSize: 24, fontWeight: "bold" },
+
   filterBar: {
     backgroundColor: "#F2F2F2",
     padding: 15,
@@ -274,11 +295,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+
   mainContent: { padding: 20, paddingBottom: 40 },
+
   cardContainer: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -286,28 +309,48 @@ const styles = StyleSheet.create({
     elevation: 5,
     marginBottom: 20,
   },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  title: { fontSize: 22, fontWeight: "bold", color: "#111827" },
+  title: { fontSize: 20, fontWeight: "bold", color: "#111827" },
+
   iaStatusBadge: {
     backgroundColor: "#8B5CF6",
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    maxHeight: 22,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  iaStatusText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
+  iaStatusText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+
   introText: {
     fontSize: 16,
     color: "#4B5563",
     lineHeight: 24,
     marginBottom: 20,
   },
+
   recommendationsList: {},
-  statsRow: { flexDirection: "row", justifyContent: "space-between" },
+
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    flexWrap: "wrap",
+    gap: 12,
+    rowGap: 16,
+    marginTop: 4,
+  },
+
   insightBox: {
     backgroundColor: "rgba(139, 92, 246, 0.1)",
     borderRadius: 12,
@@ -317,11 +360,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   insightText: { fontSize: 15, color: "#4C1D95", lineHeight: 22 },
+
   feedbackStatsRow: {
     flexDirection: "row",
     justifyContent: "center",
-    marginHorizontal: -4,
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 12,
   },
+
   placeholderContainer: {
     flex: 1,
     justifyContent: "center",
@@ -336,3 +383,4 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
+
